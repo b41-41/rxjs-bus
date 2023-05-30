@@ -1,10 +1,10 @@
 // map.js
-import {handleAjax} from "./common.js";
+import { handleAjax } from "./common.js";
 
 const {
     fromEvent,
     from,
-    of ,
+    of,
     merge,
     combineLatest
 } = rxjs;
@@ -91,7 +91,7 @@ export default class Map {
     closeInfoWindow() {
         this.infowindow.close();
     }
-    
+
     // 전달된 위치 정보에서 정보창림을 보여줘야하는 지(true) 감춰야하는지(false) 여부를 반환한다.
     isOpenInfoWindow(position) {
         return !(position.equals(this.infowindow.getPosition()) && this.infowindow.getMap());
@@ -110,7 +110,7 @@ export default class Map {
             this.mapBus,
         );
 
-        station$.subscribe(({ markerInfo, buses}) => {
+        station$.subscribe(({ markerInfo, buses }) => {
             if (this.isOpenInfoWindow(markerInfo.position)) {
                 this.openInfoWindow(
                     markerInfo.marker,
@@ -124,12 +124,12 @@ export default class Map {
     }
     createDragend$() {
         return fromEvent(this.naverMap, "dragend") // 지도 영역을 dragend 했을 때
-        .pipe(
-            map(({ coord }) => ({
-                latitude: coord.y,
-                longitude: coord.x
-            }))
-        );
+            .pipe(
+                map(({ coord }) => ({
+                    latitude: coord.y,
+                    longitude: coord.x
+                }))
+            );
     }
     mapStation(coord$) {
         return coord$
@@ -140,48 +140,55 @@ export default class Map {
     }
     mapMarkerClick(marker$) {
         return marker$
-        .pipe(
-            mergeMap(marker => fromEvent(marker, "click")),
-            map(({ overlay }) => ({
-                marker: overlay,
-                position: overlay.getPosition(),
-                id: overlay.getOptions("id"), // 버스정류소ID 정보를 얻음
-                name: overlay.getOptions("name") // 버스정류소 이름을 얻음
-            }))
-        );
+            .pipe(
+                mergeMap(marker => fromEvent(marker, "click")),
+
+                map(({ overlay }) => ({
+                    marker: overlay,
+                    position: overlay.getPosition(),
+                    id: overlay.getOptions("id"), // 버스정류소ID 정보를 얻음
+                    name: overlay.getOptions("name") // 버스정류소 이름을 얻음
+                }))
+            );
     }
     manageMarker(station$) {
         return station$
-        .pipe(
-            map(stations => stations.map(station => {
-                const marker = this.createMarker(station.stationName, station.x, station.y);
-                // 버스정류소ID, 버스정류소 이름 정보를 marker에 저장
-                marker.setOptions("id", station.stationId);
-                marker.setOptions("name", station.stationName);
-                return marker;
-            })),
-            scan((prev, markers) => {
-                // 이전 markers 삭제
-                prev.forEach(this.deleteMarker);
-                prev = markers;
-                return prev;
-            }, []),
-            mergeMap(markers => from(markers))
-        );
+            .pipe(
+                map(stations => stations.map(station => {
+                    const marker = this.createMarker(station.stationName, station.x, station.y);
+                    // 버스정류소ID, 버스정류소 이름 정보를 marker에 저장
+                    marker.setOptions("id", station.stationId);
+                    marker.setOptions("name", station.stationName);
+                    return marker;
+                })),
+                tap(console.log),
+
+                scan((prev, markers) => {
+                    // 이전 markers 삭제
+                    prev.forEach(this.deleteMarker);
+                    prev = markers;
+                    return prev;
+                }, []),
+                mergeMap(markers => from(markers)),
+            );
     }
     mapBus(markerInfo$) {
         return markerInfo$
-        .pipe(
-            switchMap(markerInfo => {
-                const marker$ = of(markerInfo);
-                const bus$ = ajax.getJSON(`/bus/pass/station/${markerInfo.id}`)
-                    .pipe(handleAjax("busRouteList"));
-                return combineLatest(marker$, bus$, (marker, buses) => ({
-                        buses,
-                        markerInfo
-                    }));
-            })
-        );
+            .pipe(
+                switchMap(markerInfo => {
+                    const marker$ = of(markerInfo);
+                    const bus$ = ajax.getJSON(`/bus/pass/station/${markerInfo.id}`)
+                        .pipe(handleAjax("busRouteList"));
+                    return combineLatest(marker$, bus$, (marker, buses) => {
+                        console.log({ buses, marker })
+                        console.log({ buses, markerInfo })
+                        return {
+                            buses,
+                            markerInfo
+                        }
+                    });
+                })
+            );
     }
     render(buses, { name }) {
         const list = buses.map(bus => (`<dd>
@@ -189,9 +196,11 @@ export default class Map {
                     <strong>${bus.routeName}</strong> <span>${bus.regionName}</span> <span class="type ${getBuesType(bus.routeTypeName)}">${bus.routeTypeName}</span>
                 </a>
             </dd>`)).join("");
-    
+
+
+
         return `<dl class="bus-routes">
             <dt><strong>${name}</strong></dt>${list}
         </dl>`;
-    }    
+    }
 }
